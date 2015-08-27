@@ -1,4 +1,6 @@
 
+var apiKeys = ["f36c188ffe9619d86d057b72d946c56d", "5dd141edf27e5ff3dd4fa0583d7a6d2e"];
+
 var tails = [
 	'world', 
 	'zone',
@@ -82,8 +84,8 @@ http.createServer(function(req, res) {
 	res.end(JSON.stringify(body, null, 4));
 
 
-	}).listen(1337, 'localhost'); // for local debuggin
-	//}).listen(process.env.PORT); // for production
+	//}).listen(1337, 'localhost'); // for local debuggin
+}).listen(process.env.PORT); // for production
 
 function addResults(synonyms, shouldNest){	
 	
@@ -121,14 +123,22 @@ function error(message){
 console.log('Server running');
 
 function getSynonyms(word){
-	// smash the thesaurus API
-	var thesaurusUrl = "http://words.bighugelabs.com/api/2/5dd141edf27e5ff3dd4fa0583d7a6d2e/" + word + "/json";
 	
-	var response = request('GET', thesaurusUrl);			
+	try{
+		
+		// smash the thesaurus API
+		var thesaurusUrl = "http://words.bighugelabs.com/api/2/" + apiKeys[0] + "/" + word + "/json";
+					
+		var resultsStr = getResponseFromFile(word);
 	
-	try{					
-		var responseStr = response.body;		
-		var jsonResponse = JSON.parse(responseStr);
+		if(resultsStr==null){	
+			console.log("cache miss");
+			response = request('GET', thesaurusUrl);			
+			resultsStr = response.body;
+			writeResponseToFile(word, resultsStr);			
+		}						
+				
+		var jsonResponse = JSON.parse(resultsStr);
 		return jsonResponse.noun.syn;
 		
 	}catch(err){				
@@ -136,9 +146,28 @@ function getSynonyms(word){
 	}
 }
 
-function get(url) {
-  return new (require('common-node').httpclient.HttpClient)({
-    method: 'GET',
-      url: url
-    }).finish().body.read().decodeToString();
+function writeResponseToFile(key, value){
+	try{
+		
+		var fs = require('fs');
+		
+		if (!fs.existsSync("cache")){
+		    fs.mkdirSync("cache");
+		}
+				
+		fs.writeFileSync("cache/" + key + ".json", value);
+	}catch(err){		
+	}
 }
+
+function getResponseFromFile(key){
+	try{
+		var fs = require('fs');
+		var contents = fs.readFileSync("cache/" + key + ".json").toString();
+		console.log("cache hit");
+		return contents;
+	}catch(err){
+		
+	}
+}
+
