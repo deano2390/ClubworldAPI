@@ -63,32 +63,15 @@ http.createServer(function(req, res) {
 	body.input = query.word;
 	
 	// smash the thesaurus API
-	var thesaurusUrl = "http://words.bighugelabs.com/api/2/5dd141edf27e5ff3dd4fa0583d7a6d2e/" + query.word + "/json";
+	var synonyms = getSynonyms(query.word);
 	
-	var response = request('GET', thesaurusUrl);			
+	if(!synonyms){
+		error("unrecognised word galaxy");	
+		return;		
+	}
 	
-	try{	
-		
-		if(response.statusCode != 200){
-			error("unrecognised word galaxy");	
-			return;		
-		}
-		
-		var responseStr = response.getBody();		
-		
-		var jsonResponse = JSON.parse(responseStr);
-		var heads = jsonResponse.noun.syn;
-
-		for (i = 0; i < heads.length; i++) {
-			
-			var randomNumber = Math.floor(Math.random()*tails.length);
-			var tail = tails[randomNumber];
-			var head = heads[i];
-			var phrase = head + ' ' + tail;
-			body.worlds.push(phrase);
-			
-		}
-		
+	try{			
+		addResults(synonyms, query.nested);		
 		body.result = "success world";
 		
 	}catch(err){		
@@ -102,6 +85,33 @@ http.createServer(function(req, res) {
 	}).listen(1337, 'localhost'); // for local debuggin
 	//}).listen(process.env.PORT); // for production
 
+function addResults(synonyms, shouldNest){	
+	
+	for (i = 0; i < synonyms.length; i++) {	
+	
+		var randomNumber = Math.floor(Math.random()*tails.length);
+		var tail = tails[randomNumber];
+		var synonym = synonyms[i];		
+				
+		var phrase = synonym + ' ' + tail;
+		body.worlds.push(phrase);		
+						
+	}
+			
+	// should we do a nested call?
+	if(shouldNest){
+		
+		for (i2 = 0; i2 < synonyms.length; i2++) {	
+			var synonym = synonyms[i2];				
+			var nestedSynonyms = getSynonyms(synonym);
+			if(nestedSynonyms){
+				addResults(nestedSynonyms, false);
+			} 
+		} 
+	}
+		
+}
+
 function error(message){
 	body.result = "fail land";
 	body.reason = message;
@@ -109,6 +119,22 @@ function error(message){
 }
 
 console.log('Server running');
+
+function getSynonyms(word){
+	// smash the thesaurus API
+	var thesaurusUrl = "http://words.bighugelabs.com/api/2/5dd141edf27e5ff3dd4fa0583d7a6d2e/" + word + "/json";
+	
+	var response = request('GET', thesaurusUrl);			
+	
+	try{					
+		var responseStr = response.body;		
+		var jsonResponse = JSON.parse(responseStr);
+		return jsonResponse.noun.syn;
+		
+	}catch(err){				
+		return;		
+	}
+}
 
 function get(url) {
   return new (require('common-node').httpclient.HttpClient)({
