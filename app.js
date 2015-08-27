@@ -1,5 +1,37 @@
 
-var tails = ['world', 'zone', 'land', 'planet', 'club', 'galaxy', 'universe', 'district', 'area', 'embassy', 'bureau', 'agency', 'society', 'guild', 'association', 'lodge', 'station', 'garrison', 'fort', 'base', 'encampment', 'fortress'];
+var tails = [
+	'world', 
+	'zone',
+	'land', 
+	'planet', 
+	'club', 
+	'galaxy', 
+	'universe', 
+	'district', 
+	'area', 
+	'embassy', 
+	'bureau', 
+	'agency', 
+	'society', 
+	'guild', 
+	'association', 
+	'lodge', 
+	'station', 
+	'garrison', 
+	'fort', 
+	'base', 
+	'encampment',
+	'squad',
+	'gang',
+	'parlour',
+	'sector',
+	'realm',
+	'province',
+	'kingdom',
+	'empire',
+	'quarter',
+	'dynasty',	
+	'fortress'];
 
 //var common = require('common-node')
 var url = require('url');
@@ -67,8 +99,8 @@ http.createServer(function(req, res) {
 	res.end(JSON.stringify(body, null, 4));
 
 
-//	}).listen(1337, 'localhost'); // for local debuggin
-}).listen(process.env.PORT); // for production
+	}).listen(1337, 'localhost'); // for local debuggin
+	//}).listen(process.env.PORT); // for production
 
 function error(message){
 	body.result = "fail land";
