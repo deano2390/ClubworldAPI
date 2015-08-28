@@ -98,32 +98,32 @@ http.createServer(function(req, res) {
 
 function addResults(synonyms, shouldNest, callback){	
 	
-	for (i = 0; i < synonyms.length; i++) {	
+	if(synonyms){
+		for (var i = 0; i < synonyms.length; i++) {	
 	
-		var randomNumber = Math.floor(Math.random()*tails.length);
-		var tail = tails[randomNumber];
-		var synonym = synonyms[i];		
+			var randomNumber = Math.floor(Math.random()*tails.length);
+			var tail = tails[randomNumber];
+			var synonym = synonyms[i];		
 				
-		var phrase = synonym + ' ' + tail;
-		body.worlds.push(phrase);		
+			var phrase = synonym + ' ' + tail;
+			body.worlds.push(phrase);		
 						
+		}
 	}
 			
 	// should we do a nested call?
-	if(shouldNest){
+	if(shouldNest && synonyms){
 		
-		for (i2 = 0; i2 < synonyms.length; i2++) {	
-			var synonym = synonyms[i2];	
+		for (var i = 0; i < synonyms.length; i++) {	
+			var synonym = synonyms[i];	
 						
 			getSynonyms(synonym, function(nestedSynonyms){
-				if(nestedSynonyms){
-					if(i2 == synonyms.length-1){
+
+					if(i >= synonyms.length-1){
 						addResults(nestedSynonyms, false, callback);
 					}else{
 						addResults(nestedSynonyms, false);						
-					}				
-
-				} 
+					}
 			});			
 		} 
 	}else{
