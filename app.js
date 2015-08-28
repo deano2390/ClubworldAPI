@@ -93,8 +93,8 @@ http.createServer(function(req, res) {
 	
 
 
-	//}).listen(1337, 'localhost'); // for local debuggin
-}).listen(process.env.PORT); // for production
+}).listen(1337, 'localhost'); // for local debuggin
+//}).listen(process.env.PORT); // for production
 
 function addResults(synonyms, shouldNest, callback){	
 	
@@ -162,15 +162,22 @@ function getSynonyms(word, callback){
 			console.log("cache miss");
 			
 			request(thesaurusUrl, function(error, response, body) {
-			  	try{
+			  	
+				var result;
+				
+				try{
 					console.log(body);
 	  				resultsStr = response.body;
 	  				writeResponseToFile(word, resultsStr);	
 					var jsonResponse = JSON.parse(resultsStr);
-					callback(jsonResponse.noun.syn);	
+					result = jsonResponse.noun.syn;	
 				}catch(err){}
-					callback();			
-				});			
+				
+				callback(result);			
+				
+			});			
+				
+				
 		}										
 		
 	}catch(err){				
