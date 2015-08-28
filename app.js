@@ -45,13 +45,23 @@ var body, responseCallback;
 
 http.createServer(function(req, res) {			
 		
+	// make sure we palm off any favicon requests
+	if (req.url === '/favicon.ico') {
+	    res.writeHead(200, {'Content-Type': 'image/x-icon'} );
+	    res.end();
+	    console.log('favicon requested');
+	    return;
+	}
+		
 	responseCallback = res;
 	
 	// build the response object
 	body = {};
 	body.result = {};
-			
+	body.worlds = [];	
 	var query = url.parse(req.url, true).query;		
+	
+	if(query==undefined) return;
 	
 	if(query.word==null){
 		error("missing input zone");	
@@ -64,9 +74,15 @@ http.createServer(function(req, res) {
 	}
 	
 	body.input = query.word;	
-	body.worlds = [];
+	
 	// smash the thesaurus API
-	getSynonyms(query.word, function(synonyms){
+	
+	// reset the queues
+	runningQueries = [];
+	outstandingQueries = [];
+	
+	console.log('query: ' + query.word);
+	getSynonyms(query.word, function(input, synonyms){
 		
 		if(!synonyms){
 			error("unrecognised word galaxy");	
@@ -74,7 +90,10 @@ http.createServer(function(req, res) {
 		}
 	
 		try{			
-			addResults(synonyms, query.nested, function(){
+			
+			console.log('first callback: ' + synonyms.length);
+			
+			addResults(input, synonyms, query.nested, function(){
 				body.result = "success world";				
 				res.end(JSON.stringify(body, null, 4));	
 				recordHit(body);
@@ -86,17 +105,18 @@ http.createServer(function(req, res) {
 			return;		
 		}
 		
-		
-		
-		
-	});
-	
+	});	
 
 
-}).listen(1337, 'localhost'); // for local debuggin
-//}).listen(process.env.PORT); // for production
+	//}).listen(1337, 'localhost'); // for local debuggin
+}).listen(process.env.PORT); // for production
 
-function addResults(synonyms, shouldNest, callback){	
+
+
+var runningQueries = [];
+var outstandingQueries = [];
+
+function addResults(inputWord, synonyms, shouldNest, addResultsCallback){		
 	
 	if(synonyms){
 		for (var i = 0; i < synonyms.length; i++) {	
@@ -110,28 +130,38 @@ function addResults(synonyms, shouldNest, callback){
 			if(body.worlds.indexOf(phrase) < 0){			// only add if not already present
 				body.worlds.push(phrase);		
 			}
+			
+			if(shouldNest){
+				outstandingQueries.push(synonym);
+			}
 						
 		}
 	}
+	
+	// was this call in the queue? remove it if so
+	var indexInQueue = runningQueries.indexOf(inputWord)
+	if(indexInQueue > -1){
+		runningQueries.splice(indexInQueue, 1);
+	}
 			
 	// should we do a nested call?
-	if(shouldNest && synonyms){
+	if(shouldNest && outstandingQueries.length > 0){	
 		
-		for (var i = 0; i < synonyms.length; i++) {	
-			var synonym = synonyms[i];	
-						
-			getSynonyms(synonym, function(nestedSynonyms){
-
-					if(i >= synonyms.length-1){
-						addResults(nestedSynonyms, false, callback);
-					}else{
-						addResults(nestedSynonyms, false);						
-					}
+		while(outstandingQueries.length > 0){
+			
+			var synonym = outstandingQueries.pop();				
+			runningQueries.push(synonym);		
+			
+			getSynonyms(synonym, function(input, nestedSynonyms){
+				addResults(input, nestedSynonyms, false, addResultsCallback);					
 			});			
 		} 
-	}else{
-		if(callback)
-			callback();
+	}
+	
+	// no more queries running or queued, so we callback
+	if(runningQueries.length <= 0 && outstandingQueries.length <=0){
+		if(addResultsCallback)
+			addResultsCallback();
 	}
 		
 }
@@ -145,44 +175,46 @@ function error(message){
 
 console.log('Server running');
 
-function getSynonyms(word, callback){
+function getSynonyms(word, synonymCallback){
 	
-	try{
-		
-		// smash the thesaurus API
-		var randomNumber = Math.floor(Math.random()*apiKeys.length);
-		var thesaurusUrl = "http://words.bighugelabs.com/api/2/" + apiKeys[randomNumber] + "/" + word + "/json";
-					
-		var resultsStr = getResponseFromFile(word);
-	
-		if(resultsStr!=null){
-			var jsonResponse = JSON.parse(resultsStr);
-			callback(jsonResponse.noun.syn);
-		}else{	
-			console.log("cache miss");
-			
-			request(thesaurusUrl, function(error, response, body) {
-			  	
-				var result;
-				
-				try{
-					console.log(body);
-	  				resultsStr = response.body;
-	  				writeResponseToFile(word, resultsStr);	
-					var jsonResponse = JSON.parse(resultsStr);
-					result = jsonResponse.noun.syn;	
-				}catch(err){}
-				
-				callback(result);			
-				
-			});			
-				
-				
-		}										
+	try{									
+		getResponseFromFile(word, function(resultsStr){
+			if(resultsStr){
+				console.log("cache hit");
+				var jsonResponse = JSON.parse(resultsStr);
+				synonymCallback(word, jsonResponse.noun.syn);
+			}else{	
+				getFromWeb(word, synonymCallback);			
+			}		
+		});						
 		
 	}catch(err){				
-		callback();		
+		synonymCallback(word, null);		
 	}
+}
+
+function getFromWeb(word, webCallback){
+	console.log("cache miss");
+	
+	// smash the thesaurus API
+	var randomNumber = Math.floor(Math.random()*apiKeys.length);
+	var url = "http://words.bighugelabs.com/api/2/" + apiKeys[randomNumber] + "/" + word + "/json";
+	
+	request(url, function(error, response, body) {
+	  	
+		var result;
+		
+		try{
+			//console.log(body);
+			resultsStr = response.body;
+			writeResponseToFile(word, resultsStr);	
+			var jsonResponse = JSON.parse(resultsStr);
+			result = jsonResponse.noun.syn;	
+		}catch(err){}
+		
+		webCallback(word, result);			
+		
+	});	
 }
 
 function writeResponseToFile(key, value){
@@ -199,18 +231,35 @@ function writeResponseToFile(key, value){
 	}
 }
 
-function getResponseFromFile(key){
+function getResponseFromFile(key, fileCallback){	
+	
 	try{
 		var fs = require('fs');
-		var contents = fs.readFileSync("cache/" + key + ".json").toString();
-		console.log("cache hit");
-		return contents;
+		fs.readFile("cache/" + key + ".json", 'utf8', function (err,data) {
+		  if (err) {
+			  fileCallback();
+		  }else{
+			  fileCallback(data.toString());
+		  }
+
+		});
 	}catch(err){
 		
 	}
+	
+	/*try{
+		
+		var contents = fs.readFileSync("cache/" + key + ".json").toString();		
+		return contents;
+	}catch(err){
+		
+	}*/
 }
 
 function recordHit(body){
+	
+	console.log('recordHit ' + body.worlds.length);
+	
 	try{
 		
 		var line = "input: " + body.input + ", ";
