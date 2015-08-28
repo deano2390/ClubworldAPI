@@ -32,13 +32,14 @@ var tails = [
 	'kingdom',
 	'empire',
 	'quarter',
-	'dynasty',	
+	'dynasty',
+	'academy',	
 	'fortress'];
 
 //var common = require('common-node')
 var url = require('url');
 var http = require('http');
-var request = require('sync-request');
+var request = require('request');
 
 var body, responseCallback;
 
@@ -65,29 +66,37 @@ http.createServer(function(req, res) {
 	body.input = query.word;
 	
 	// smash the thesaurus API
-	var synonyms = getSynonyms(query.word);
-	
-	if(!synonyms){
-		error("unrecognised word galaxy");	
-		return;		
-	}
-	
-	try{			
-		addResults(synonyms, query.nested);		
-		body.result = "success world";
+	getSynonyms(query.word, function(synonyms){
 		
-	}catch(err){		
-		error("unknown error planet");	
-		return;		
-	}
+		if(!synonyms){
+			error("unrecognised word galaxy");	
+			return;		
+		}
+	
+		try{			
+			addResults(synonyms, query.nested, function(){
+				body.result = "success world";				
+				res.end(JSON.stringify(body, null, 4));	
+				recordHit(body);
+			});		
+
 		
-	res.end(JSON.stringify(body, null, 4));
+		}catch(err){		
+			error("unknown error planet");	
+			return;		
+		}
+		
+		
+		
+		
+	});
+	
 
 
 	//}).listen(1337, 'localhost'); // for local debuggin
 }).listen(process.env.PORT); // for production
 
-function addResults(synonyms, shouldNest){	
+function addResults(synonyms, shouldNest, callback){	
 	
 	for (i = 0; i < synonyms.length; i++) {	
 	
@@ -104,12 +113,22 @@ function addResults(synonyms, shouldNest){
 	if(shouldNest){
 		
 		for (i2 = 0; i2 < synonyms.length; i2++) {	
-			var synonym = synonyms[i2];				
-			var nestedSynonyms = getSynonyms(synonym);
-			if(nestedSynonyms){
-				addResults(nestedSynonyms, false);
-			} 
+			var synonym = synonyms[i2];	
+						
+			getSynonyms(synonym, function(nestedSynonyms){
+				if(nestedSynonyms){
+					if(i2 == synonyms.length-1){
+						addResults(nestedSynonyms, false, callback);
+					}else{
+						addResults(nestedSynonyms, false);						
+					}				
+
+				} 
+			});			
 		} 
+	}else{
+		if(callback)
+			callback();
 	}
 		
 }
@@ -118,28 +137,35 @@ function error(message){
 	body.result = "fail land";
 	body.reason = message;
 	responseCallback.end(JSON.stringify(body, null, 4));
+	recordHit(body);
 }
 
 console.log('Server running');
 
-function getSynonyms(word){
+function getSynonyms(word, callback){
 	
 	try{
 		
 		// smash the thesaurus API
-		var thesaurusUrl = "http://words.bighugelabs.com/api/2/" + apiKeys[0] + "/" + word + "/json";
+		var randomNumber = Math.floor(Math.random()*apiKeys.length);
+		var thesaurusUrl = "http://words.bighugelabs.com/api/2/" + apiKeys[randomNumber] + "/" + word + "/json";
 					
 		var resultsStr = getResponseFromFile(word);
 	
-		if(resultsStr==null){	
+		if(resultsStr!=null){
+			var jsonResponse = JSON.parse(resultsStr);
+			callback(jsonResponse.noun.syn);
+		}else{	
 			console.log("cache miss");
-			response = request('GET', thesaurusUrl);			
-			resultsStr = response.body;
-			writeResponseToFile(word, resultsStr);			
-		}						
-				
-		var jsonResponse = JSON.parse(resultsStr);
-		return jsonResponse.noun.syn;
+			
+			request(thesaurusUrl, function(error, response, body) {
+			  console.log(body);
+  				resultsStr = response.body;
+  				writeResponseToFile(word, resultsStr);	
+				var jsonResponse = JSON.parse(resultsStr);
+				callback(jsonResponse.noun.syn);				
+			});			
+		}										
 		
 	}catch(err){				
 		return;		
@@ -169,5 +195,33 @@ function getResponseFromFile(key){
 	}catch(err){
 		
 	}
+}
+
+function recordHit(body){
+	try{
+		
+		var line = "input: " + body.input + ", ";
+		line += "result: " + body.result + ", ";
+		line += "count: " + body.worlds.length + ", ";
+		line += "time: " + getDateTime();
+		line += '\r\n';
+		
+		var fs = require('fs');
+								
+		fs.appendFileSync("log.txt", line);
+	}catch(err){		
+	}	
+}
+
+function getDateTime(){
+	var currentdate = new Date(); 
+	var datetime =  currentdate.getDate() + "/"
+	                + (currentdate.getMonth()+1)  + "/" 
+	                + currentdate.getFullYear() + " @ "  
+	                + currentdate.getHours() + ":"  
+	                + currentdate.getMinutes() + ":" 
+	                + currentdate.getSeconds();
+					
+					return datetime;
 }
 
