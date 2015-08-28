@@ -49,8 +49,8 @@ http.createServer(function(req, res) {
 	
 	// build the response object
 	body = {};
-	body.worlds = [];
-	
+	body.result = {};
+			
 	var query = url.parse(req.url, true).query;		
 	
 	if(query.word==null){
@@ -63,8 +63,8 @@ http.createServer(function(req, res) {
 		return;		
 	}
 	
-	body.input = query.word;
-	
+	body.input = query.word;	
+	body.worlds = [];
 	// smash the thesaurus API
 	getSynonyms(query.word, function(synonyms){
 		
@@ -106,7 +106,10 @@ function addResults(synonyms, shouldNest, callback){
 			var synonym = synonyms[i];		
 				
 			var phrase = synonym + ' ' + tail;
-			body.worlds.push(phrase);		
+			
+			if(body.worlds.indexOf(phrase) < 0){			// only add if not already present
+				body.worlds.push(phrase);		
+			}
 						
 		}
 	}
@@ -159,16 +162,19 @@ function getSynonyms(word, callback){
 			console.log("cache miss");
 			
 			request(thesaurusUrl, function(error, response, body) {
-			  console.log(body);
-  				resultsStr = response.body;
-  				writeResponseToFile(word, resultsStr);	
-				var jsonResponse = JSON.parse(resultsStr);
-				callback(jsonResponse.noun.syn);				
-			});			
+			  	try{
+					console.log(body);
+	  				resultsStr = response.body;
+	  				writeResponseToFile(word, resultsStr);	
+					var jsonResponse = JSON.parse(resultsStr);
+					callback(jsonResponse.noun.syn);	
+				}catch(err){}
+					callback();			
+				});			
 		}										
 		
 	}catch(err){				
-		return;		
+		callback();		
 	}
 }
 
